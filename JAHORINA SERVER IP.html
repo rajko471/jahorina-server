@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CMAX Radar - IP na 16%</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { background: #111; font-family: Arial, sans-serif; }
+        #map { height: 100vh; width: 100vw; background: #1a1a1a; }
+
+        /* === INFO PROZOR (35%) === */
+        #file-info {
+            position: absolute;
+            bottom: 35%;
+            left: 20px;
+            z-index: 1000;
+            background: rgba(10,10,10,0.85);
+            backdrop-filter: blur(6px);
+            border: 1px solid #555;
+            border-radius: 10px;
+            padding: 12px 16px;
+            color: #ccc;
+            font-size: 12px;
+            line-height: 1.7;
+            min-width: 190px;
+            max-width: 260px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+            pointer-events: none;
+            display: none;
+        }
+        #file-info .title {
+            font-size: 13px;
+            font-weight: bold;
+            color: #fff;
+            border-bottom: 1px solid #444;
+            padding-bottom: 4px;
+            margin-bottom: 6px;
+        }
+        #file-info .label { color: #888; }
+        #file-info .value { color: #eee; font-weight: 500; }
+
+        /* === IP KONTROLER (16%) === */
+        #ip-control {
+            position: absolute;
+            bottom: 16%;          /* NOVO: 16% */
+            left: 20px;
+            z-index: 1000;
+            background: rgba(20,20,20,0.88);
+            backdrop-filter: blur(6px);
+            border: 1px solid #444;
+            border-radius: 10px;
+            padding: 10px 14px;
+            color: #eee;
+            width: 280px;
+            max-width: calc(100% - 40px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.7);
+            pointer-events: auto;
+            max-height: 260px;
+            display: flex;
+            flex-direction: column;
+        }
+        #ip-control strong {
+            font-size: 13px;
+            display: block;
+            margin-bottom: 4px;
+        }
+        #ip-control .row {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+        #ip-control .row input[type="text"] {
+            flex: 1;
+            padding: 4px 6px;
+            border-radius: 4px;
+            border: 1px solid #555;
+            background: #222;
+            color: #fff;
+            font-size: 12px;
+            min-width: 0;
+        }
+        #ip-control .row button {
+            padding: 4px 10px;
+            background: #2a6b9c;
+            border: none;
+            border-radius: 4px;
+            color: #fff;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+        #ip-control .row button:hover { background: #3a7baf; }
+        #file-list {
+            margin-top: 6px;
+            overflow-y: auto;
+            flex: 1;
+            max-height: 100px;
+            border-top: 1px solid #444;
+            padding-top: 4px;
+        }
+        #file-list .file-item {
+            display: block;
+            width: 100%;
+            text-align: left;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 4px 8px;
+            margin-bottom: 4px;
+            color: #ddd;
+            font-size: 11px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #file-list .file-item:hover {
+            background: #3a4a5a;
+            border-color: #6a8aaa;
+        }
+        #file-list .file-item .size {
+            color: #888;
+            font-size: 10px;
+            float: right;
+        }
+        #ip-status {
+            font-size: 12px;
+            color: #ffaa00;
+            min-height: 18px;
+            margin-top: 2px;
+        }
+
+        /* === UPLOAD KONTROLER (10px) === */
+        #upload-control {
+            position: absolute;
+            bottom: 10px;
+            left: 20px;
+            z-index: 1000;
+            background: rgba(20,20,20,0.88);
+            backdrop-filter: blur(6px);
+            border: 1px solid #444;
+            border-radius: 10px;
+            padding: 10px 14px;
+            color: #eee;
+            width: 280px;
+            max-width: calc(100% - 40px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.7);
+            pointer-events: auto;
+        }
+        #upload-control strong {
+            font-size: 13px;
+            display: block;
+            margin-bottom: 4px;
+        }
+        #upload-control input[type="file"] {
+            display: block;
+            width: 100%;
+            margin: 2px 0 4px 0;
+            color: #ddd;
+            cursor: pointer;
+            font-size: 12px;
+            background: #2a2a2a;
+            border: 1px solid #555;
+            border-radius: 4px;
+            padding: 3px;
+        }
+        #upload-control input[type="file"]::-webkit-file-upload-button {
+            background: #2a6b9c;
+            border: none;
+            color: #fff;
+            padding: 3px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        #upload-status {
+            font-size: 12px;
+            color: #ffaa00;
+            min-height: 18px;
+        }
+        #opacity-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 4px;
+            font-size: 12px;
+        }
+        #opacity-row input[type="range"] {
+            flex: 1;
+            cursor: pointer;
+            background: #444;
+            height: 4px;
+            border-radius: 2px;
+        }
+
+        /* === MOBILNI UREĐAJI === */
+        @media (max-width: 640px) {
+            #file-info {
+                bottom: 40%;
+                left: 10px;
+                min-width: 140px;
+                font-size: 11px;
+                padding: 8px 12px;
+            }
+            #ip-control {
+                bottom: 20%;          /* 16% + 4% za mobitel */
+                left: 10px;
+                width: calc(100% - 20px);
+                max-height: 180px;
+            }
+            #file-list { max-height: 70px; }
+            #upload-control {
+                bottom: 5px;
+                left: 10px;
+                width: calc(100% - 20px);
+                padding: 8px 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+
+    <!-- INFO PROZOR -->
+    <div id="file-info">
+        <div class="title">📋 Informacije o fajlu</div>
+        <div><span class="label">Naziv:</span> <span class="value" id="file-name">-</span></div>
+        <div><span class="label">Veličina:</span> <span class="value" id="file-size">-</span></div>
+        <div><span class="label">Vreme upload-a:</span> <span class="value" id="upload-time">-</span></div>
+        <div><span class="label">Vreme fajla:</span> <span class="value" id="file-modified">-</span></div>
+    </div>
+
+    <!-- IP KONTROLER -->
+    <div id="ip-control">
+        <strong>📂 Otvori folder preko IP</strong>
+        <div class="row">
+            <input type="text" id="folder-url" value="http://192.168.1.100:8000/radar/" placeholder="URL do foldera" />
+            <button id="load-folder-btn">🔍</button>
+        </div>
+        <div id="file-list">
+            <div style="color:#666; font-size:11px; text-align:center; padding:6px 0;">Unesite adresu i kliknite 🔍</div>
+        </div>
+        <div id="ip-status">⏳ Spremno</div>
+    </div>
+
+    <!-- UPLOAD KONTROLER -->
+    <div id="upload-control">
+        <strong>📡 Upload KMZ fajla</strong>
+        <input type="file" id="kmz-upload" accept=".kmz" />
+        <div id="upload-status">⏳ Sačekajte fajl...</div>
+        <div id="opacity-row">
+            <span>🔆</span>
+            <input type="range" id="opacity-slider" min="0.5" max="1.0" step="0.01" value="1.0" />
+            <span id="opacity-value">100%</span>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <script>
+        // === MAPA ===
+        const map = L.map('map').setView([44, 18], 7);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '© OpenStreetMap, © CartoDB',
+            subdomains: 'abcd'
+        }).addTo(map);
+
+        // === DOM elementi ===
+        const fileInfoDiv = document.getElementById('file-info');
+        const fileNameSpan = document.getElementById('file-name');
+        const fileSizeSpan = document.getElementById('file-size');
+        const uploadTimeSpan = document.getElementById('upload-time');
+        const fileModifiedSpan = document.getElementById('file-modified');
+
+        const folderUrlInput = document.getElementById('folder-url');
+        const loadBtn = document.getElementById('load-folder-btn');
+        const fileListDiv = document.getElementById('file-list');
+        const ipStatusDiv = document.getElementById('ip-status');
+
+        const fileInput = document.getElementById('kmz-upload');
+        const uploadStatusDiv = document.getElementById('upload-status');
+        const opacitySlider = document.getElementById('opacity-slider');
+        const opacitySpan = document.getElementById('opacity-value');
+
+        let radarOverlay = null;
+
+        // === Opacity ===
+        opacitySlider.addEventListener('input', function() {
+            const val = parseFloat(this.value);
+            opacitySpan.textContent = Math.round(val * 100) + '%';
+            if (radarOverlay) radarOverlay.setOpacity(val);
+        });
+
+        // === Pomoćne funkcije ===
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / 1048576).toFixed(1) + ' MB';
+        }
+        function formatDate(timestamp) {
+            if (!timestamp) return '-';
+            const d = new Date(timestamp);
+            return d.toLocaleDateString('sr-RS') + ' ' + d.toLocaleTimeString('sr-RS');
+        }
+
+        // === Prikaz informacija o fajlu ===
+        function showFileInfo(name, size, modified) {
+            fileInfoDiv.style.display = 'block';
+            fileNameSpan.textContent = name || '-';
+            fileSizeSpan.textContent = size ? formatFileSize(size) : '-';
+            uploadTimeSpan.textContent = formatDate(Date.now());
+            fileModifiedSpan.textContent = modified ? formatDate(modified) : '-';
+        }
+
+        // === Prikaz slike na mapi ===
+        function prikaziSliku(base64, bounds) {
+            const imageUrl = `data:image/png;base64,${base64}`;
+            if (radarOverlay) map.removeLayer(radarOverlay);
+            radarOverlay = L.imageOverlay(imageUrl, bounds, {
+                opacity: parseFloat(opacitySlider.value)
+            }).addTo(map);
+            map.fitBounds(bounds);
+        }
+
+        // === Učitavanje KMZ sa servera ===
+        function loadKMZFromUrl(url, fileName) {
+            ipStatusDiv.textContent = '⏳ Učitavanje...';
+            fetch(url)
+                .then(response => {
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    return response.arrayBuffer();
+                })
+                .then(arrayBuffer => JSZip.loadAsync(arrayBuffer))
+                .then(zip => {
+                    const kmlFile = Object.keys(zip.files).find(f => f.toLowerCase().endsWith('.kml'));
+                    const imageFile = Object.keys(zip.files).find(f => /\.(png|jpe?g)$/i.test(f));
+                    if (!kmlFile || !imageFile) {
+                        ipStatusDiv.textContent = '❌ Nema KML ili slike.';
+                        return;
+                    }
+                    return Promise.all([
+                        zip.file(kmlFile).async('string'),
+                        zip.file(imageFile).async('base64')
+                    ]);
+                })
+                .then(([kmlContent, imageBase64]) => {
+                    const parser = new DOMParser();
+                    const kmlDoc = parser.parseFromString(kmlContent, 'text/xml');
+
+                    let latLonBox = kmlDoc.querySelector('LatLonBox');
+                    if (latLonBox) {
+                        const north = parseFloat(latLonBox.querySelector('north')?.textContent);
+                        const south = parseFloat(latLonBox.querySelector('south')?.textContent);
+                        const east = parseFloat(latLonBox.querySelector('east')?.textContent);
+                        const west = parseFloat(latLonBox.querySelector('west')?.textContent);
+                        if (!isNaN(north) && !isNaN(south) && !isNaN(east) && !isNaN(west)) {
+                            prikaziSliku(imageBase64, [[south, west], [north, east]]);
+                            ipStatusDiv.textContent = '✅ Radar prikazan!';
+                            showFileInfo(fileName, null, null);
+                            return;
+                        }
+                    }
+
+                    let quad = kmlDoc.querySelector('gx\\:LatLonQuad, LatLonQuad');
+                    if (quad) {
+                        const coords = quad.querySelector('coordinates')?.textContent?.trim();
+                        if (coords) {
+                            const pts = coords.split(/\s+/).map(p => p.split(',').map(Number));
+                            if (pts.length === 4) {
+                                const lats = pts.map(p => p[1]);
+                                const lngs = pts.map(p => p[0]);
+                                const bounds = [[Math.min(...lats), Math.min(...lngs)], [Math.max(...lats), Math.max(...lngs)]];
+                                prikaziSliku(imageBase64, bounds);
+                                ipStatusDiv.textContent = '✅ Radar prikazan!';
+                                showFileInfo(fileName, null, null);
+                                return;
+                            }
+                        }
+                    }
+
+                    ipStatusDiv.textContent = '❌ Ne mogu da odredim poziciju.';
+                    console.log('KML:', kmlContent.substring(0, 500));
+                })
+                .catch(err => {
+                    ipStatusDiv.textContent = '❌ Greška: ' + err.message;
+                    console.error(err);
+                });
+        }
+
+        // === Dohvatanje liste fajlova sa servera ===
+        loadBtn.addEventListener('click', function() {
+            let baseUrl = folderUrlInput.value.trim();
+            if (!baseUrl.endsWith('/')) baseUrl += '/';
+            ipStatusDiv.textContent = '⏳ Dohvatanje liste...';
+            fileListDiv.innerHTML = '<div style="color:#666; font-size:11px; text-align:center;">⏳ Učitavanje...</div>';
+
+            fetch(baseUrl)
+                .then(response => {
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    return response.text();
+                })
+                .then(html => {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    const links = doc.querySelectorAll('a');
+                    const kmzFiles = [];
+                    links.forEach(a => {
+                        const href = a.getAttribute('href');
+                        if (href && href.toLowerCase().endsWith('.kmz')) {
+                            let size = null;
+                            const parent = a.parentElement;
+                            if (parent) {
+                                const sizeText = parent.textContent.match(/(\d+\.?\d*)\s*(KB|MB|B)/);
+                                if (sizeText) {
+                                    const val = parseFloat(sizeText[1]);
+                                    const unit = sizeText[2];
+                                    if (unit === 'KB') size = val * 1024;
+                                    else if (unit === 'MB') size = val * 1048576;
+                                    else if (unit === 'B') size = val;
+                                }
+                            }
+                            kmzFiles.push({
+                                name: href,
+                                url: new URL(href, baseUrl).href,
+                                size: size
+                            });
+                        }
+                    });
+
+                    if (kmzFiles.length === 0) {
+                        fileListDiv.innerHTML = '<div style="color:#ff8844; font-size:11px; text-align:center;">❌ Nema .kmz fajlova.</div>';
+                        ipStatusDiv.textContent = '❌ Nema KMZ fajlova.';
+                        return;
+                    }
+
+                    fileListDiv.innerHTML = '';
+                    kmzFiles.forEach(file => {
+                        const btn = document.createElement('button');
+                        btn.className = 'file-item';
+                        const sizeStr = file.size ? formatFileSize(file.size) : '';
+                        btn.innerHTML = `<span>${file.name}</span>${sizeStr ? `<span class="size">${sizeStr}</span>` : ''}`;
+                        btn.addEventListener('click', function() {
+                            loadKMZFromUrl(file.url, file.name);
+                        });
+                        fileListDiv.appendChild(btn);
+                    });
+                    ipStatusDiv.textContent = `✅ ${kmzFiles.length} KMZ fajlova.`;
+                })
+                .catch(err => {
+                    ipStatusDiv.textContent = '❌ Greška: ' + err.message;
+                    fileListDiv.innerHTML = `<div style="color:#ff6644; font-size:11px; text-align:center;">❌ ${err.message}<br><br>Proverite server i CORS.</div>`;
+                });
+        });
+
+        folderUrlInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') loadBtn.click();
+        });
+
+        // === Upload KMZ sa lokalnog računara ===
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            showFileInfo(file.name, file.size, file.lastModified);
+            uploadStatusDiv.textContent = '⏳ Čitanje...';
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                JSZip.loadAsync(event.target.result).then(function(zip) {
+                    const kmlFile = Object.keys(zip.files).find(f => f.toLowerCase().endsWith('.kml'));
+                    const imageFile = Object.keys(zip.files).find(f => /\.(png|jpe?g)$/i.test(f));
+                    if (!kmlFile || !imageFile) {
+                        uploadStatusDiv.textContent = '❌ Nema KML ili slike.';
+                        return;
+                    }
+                    return Promise.all([
+                        zip.file(kmlFile).async('string'),
+                        zip.file(imageFile).async('base64')
+                    ]);
+                })
+                .then(([kmlContent, imageBase64]) => {
+                    const parser = new DOMParser();
+                    const kmlDoc = parser.parseFromString(kmlContent, 'text/xml');
+
+                    let latLonBox = kmlDoc.querySelector('LatLonBox');
+                    if (latLonBox) {
+                        const north = parseFloat(latLonBox.querySelector('north')?.textContent);
+                        const south = parseFloat(latLonBox.querySelector('south')?.textContent);
+                        const east = parseFloat(latLonBox.querySelector('east')?.textContent);
+                        const west = parseFloat(latLonBox.querySelector('west')?.textContent);
+                        if (!isNaN(north) && !isNaN(south) && !isNaN(east) && !isNaN(west)) {
+                            prikaziSliku(imageBase64, [[south, west], [north, east]]);
+                            uploadStatusDiv.textContent = '✅ Radar prikazan!';
+                            return;
+                        }
+                    }
+
+                    let quad = kmlDoc.querySelector('gx\\:LatLonQuad, LatLonQuad');
+                    if (quad) {
+                        const coords = quad.querySelector('coordinates')?.textContent?.trim();
+                        if (coords) {
+                            const pts = coords.split(/\s+/).map(p => p.split(',').map(Number));
+                            if (pts.length === 4) {
+                                const lats = pts.map(p => p[1]);
+                                const lngs = pts.map(p => p[0]);
+                                const bounds = [[Math.min(...lats), Math.min(...lngs)], [Math.max(...lats), Math.max(...lngs)]];
+                                prikaziSliku(imageBase64, bounds);
+                                uploadStatusDiv.textContent = '✅ Radar prikazan!';
+                                return;
+                            }
+                        }
+                    }
+
+                    uploadStatusDiv.textContent = '❌ Ne mogu da odredim poziciju.';
+                    console.log('KML:', kmlContent.substring(0, 500));
+                })
+                .catch(err => {
+                    uploadStatusDiv.textContent = '❌ Greška: ' + err.message;
+                    console.error(err);
+                });
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        console.log('✅ Stranica spremna – IP na 16%, info 35%, upload 10px.');
+    </script>
+</body>
+</html>
